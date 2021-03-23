@@ -9,16 +9,19 @@ WORKDIR /var/www/html
 COPY --from=nodejs /opt /opt
 COPY --from=nodejs /usr/local /usr/local
 
-ENV TZ=UTC
+COPY start-container /usr/local/bin/start-container
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY php.ini /etc/php/8.0/cli/conf.d/99-sail.ini
 
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+ENV TZ=UTC
 
 ENV PHP8_MODULE_DEPS zlib-dev libmemcached-dev cyrus-sasl-dev libpng-dev libxml2-dev krb5-dev curl-dev icu-dev libzip-dev openldap-dev imap-dev postgresql-dev
 
 RUN curl http://getcomposer.org/installer | php -- --install-dir=/usr/bin/ --filename=composer \
     && apk add --no-cache php8-cli php8-dev libstdc++ mysql-client bash bash-completion shadow \
         supervisor git zip unzip python2 coreutils libpng libmemcached-libs krb5-libs icu-libs \
-        icu c-client libzip openldap-clients imap postgresql-client postgresql-libs libcap \
+        icu c-client libzip openldap-clients imap postgresql-client postgresql-libs libcap zoneinfo \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
     && set -xe \
     && apk add --no-cache --update --virtual .phpize-deps $PHPIZE_DEPS \
     && apk add --no-cache --update --virtual .all-deps $PHP8_MODULE_DEPS \
@@ -36,16 +39,10 @@ RUN curl http://getcomposer.org/installer | php -- --install-dir=/usr/bin/ --fil
     && npm --version \
     && yarn --version \
     && cd /usr/local \
-    && rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
-
-RUN setcap 'cap_net_bind_service=+ep' /usr/local/bin/php
-
-RUN adduser -s /bin/bash -g 82 -D sail
-
-COPY start-container /usr/local/bin/start-container
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY php.ini /etc/php/8.0/cli/conf.d/99-sail.ini
-RUN chmod +x /usr/local/bin/start-container \
+    && rm -rf /var/cache/apk/* /tmp/* /var/tmp/* \
+    && setcap 'cap_net_bind_service=+ep' /usr/local/bin/php \
+    && adduser -s /bin/bash -g 82 -D sail \
+    && chmod +x /usr/local/bin/start-container \
     && mkdir -p /var/log/supervisor \
     && sed -i 's/usr\/bin\/php/usr\/local\/bin\/php/g' /etc/supervisor/conf.d/supervisord.conf
 
